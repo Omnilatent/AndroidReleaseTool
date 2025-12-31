@@ -20,6 +20,7 @@ namespace BundleToolGUI
 
             this.btnBrowseAab.Click += new System.EventHandler(this.btnBrowseAab_Click);
             this.btnBrowseOutput.Click += new System.EventHandler(this.btnBrowseOutput_Click);
+            this.btnInstall.Click += new System.EventHandler(this.btnInstall_Click);
         }
 
         private Task RunCommandAsync(string arguments)
@@ -81,6 +82,18 @@ namespace BundleToolGUI
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     txtAabPath.Text = dialog.FileName;
+
+                    // Get folder containing the AAB
+                    string aabDirectory = Path.GetDirectoryName(dialog.FileName);
+
+                    // Create APKs subfolder path
+                    string apksFolder = Path.Combine(aabDirectory, "APKs");
+
+                    // Auto set output folder only if empty
+                    if (string.IsNullOrEmpty(txtOutputFolder.Text))
+                    {
+                        txtOutputFolder.Text = apksFolder;
+                    }
                 }
             }
         }
@@ -99,7 +112,6 @@ namespace BundleToolGUI
             }
         }
 
-
         private async void btnInstall_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtAabPath.Text) ||
@@ -111,22 +123,54 @@ namespace BundleToolGUI
 
             txtLog.Clear();
 
-            string apksPath = Path.Combine(
-                txtOutputFolder.Text,
-                "my_app.apks"
-            );
+            string aabPath = txtAabPath.Text;
+            string outputDir = txtOutputFolder.Text;
+
+            if (!Directory.Exists(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+
+            string aabName = Path.GetFileNameWithoutExtension(aabPath);
+            string apksPath = Path.Combine(outputDir, aabName + ".apks");
+
+            bool needRebuild = true;
+
+            if (File.Exists(apksPath))
+            {
+                DateTime aabTime = File.GetLastWriteTimeUtc(aabPath);
+                DateTime apksTime = File.GetLastWriteTimeUtc(apksPath);
+
+                if (apksTime >= aabTime)
+                {
+                    needRebuild = false;
+                    txtLog.AppendText("Existing APKs are up to date. Reusing.\r\n");
+                }
+                else
+                {
+                    txtLog.AppendText("AAB was updated. Rebuilding APKs.\r\n");
+                }
+            }
+            else
+            {
+                txtLog.AppendText("No APKs found. Building.\r\n");
+            }
+
+            if (needRebuild)
+            {
+                await RunCommandAsync(
+                    "-jar \"" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bundletool.jar") + "\" build-apks --overwrite " +
+                    "--bundle=\"" + aabPath + "\" " +
+                    "--output=\"" + apksPath + "\""
+                );
+            }
 
             await RunCommandAsync(
-                "-jar bundletool.jar build-apks --overwrite " +
-                "--bundle=\"" + txtAabPath.Text + "\" " +
-                "--output=\"" + apksPath + "\""
-            );
-
-            await RunCommandAsync(
-                "-jar bundletool.jar install-apks " +
+                "-jar \"" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bundletool.jar") + "\" install-apks " +
                 "--apks=\"" + apksPath + "\""
             );
-        }
 
+            txtLog.AppendText("Install completed successfully.\r\n");
+        }
     }
 }

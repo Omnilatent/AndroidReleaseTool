@@ -80,7 +80,7 @@ namespace BundleToolGUI
             // tableLayout
             // 
             this.tableLayout.ColumnCount = 3;
-            this.tableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 120F));
+            this.tableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 159F));
             this.tableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.tableLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 100F));
             this.tableLayout.Controls.Add(this.lblAab, 0, 0);
@@ -115,10 +115,10 @@ namespace BundleToolGUI
             // txtAabPath
             // 
             this.txtAabPath.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtAabPath.Location = new System.Drawing.Point(123, 3);
+            this.txtAabPath.Location = new System.Drawing.Point(162, 3);
             this.txtAabPath.Name = "txtAabPath";
             this.txtAabPath.ReadOnly = true;
-            this.txtAabPath.Size = new System.Drawing.Size(546, 22);
+            this.txtAabPath.Size = new System.Drawing.Size(507, 22);
             this.txtAabPath.TabIndex = 1;
             // 
             // btnBrowseAab
@@ -134,18 +134,18 @@ namespace BundleToolGUI
             // 
             this.lblOutput.Location = new System.Drawing.Point(3, 35);
             this.lblOutput.Name = "lblOutput";
-            this.lblOutput.Size = new System.Drawing.Size(100, 23);
+            this.lblOutput.Size = new System.Drawing.Size(151, 23);
             this.lblOutput.TabIndex = 3;
-            this.lblOutput.Text = "Output folder";
+            this.lblOutput.Text = "Output APKs folder";
             this.lblOutput.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // txtOutputFolder
             // 
             this.txtOutputFolder.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.txtOutputFolder.Location = new System.Drawing.Point(123, 38);
+            this.txtOutputFolder.Location = new System.Drawing.Point(162, 38);
             this.txtOutputFolder.Name = "txtOutputFolder";
             this.txtOutputFolder.ReadOnly = true;
-            this.txtOutputFolder.Size = new System.Drawing.Size(546, 22);
+            this.txtOutputFolder.Size = new System.Drawing.Size(507, 22);
             this.txtOutputFolder.TabIndex = 4;
             // 
             // btnBrowseOutput
@@ -166,7 +166,6 @@ namespace BundleToolGUI
             this.btnInstall.Size = new System.Drawing.Size(766, 44);
             this.btnInstall.TabIndex = 6;
             this.btnInstall.Text = "Build and install";
-            this.btnInstall.Click += new System.EventHandler(this.btnInstall_Click);
             // 
             // txtLog
             // 
