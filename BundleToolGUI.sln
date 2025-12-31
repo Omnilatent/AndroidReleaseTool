@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.33529.622
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BundleToolGUI", "BundleToolGUI\BundleToolGUI.csproj", "{F5629096-8083-417E-B48A-272D32767A15}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidReleaseTool", "BundleToolGUI\AndroidReleaseTool.csproj", "{F5629096-8083-417E-B48A-272D32767A15}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C85104DD-CBDC-43E0-B83A-88A10943CF08}"
 EndProject

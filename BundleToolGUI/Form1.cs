@@ -10,17 +10,18 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace BundleToolGUI
+namespace AndroidReleaseTool
 {
     public partial class Form1 : Form
     {
         public Form1()
         {
             InitializeComponent();
-
             this.btnBrowseAab.Click += new System.EventHandler(this.btnBrowseAab_Click);
             this.btnBrowseOutput.Click += new System.EventHandler(this.btnBrowseOutput_Click);
             this.btnInstall.Click += new System.EventHandler(this.btnInstall_Click);
+
+            WireKeystoreBase64Events();
         }
 
         private Task RunCommandAsync(string arguments)
@@ -172,5 +173,64 @@ namespace BundleToolGUI
 
             txtLog.AppendText("Install completed successfully.\r\n");
         }
+
+        #region Keystore
+        private void WireKeystoreBase64Events()
+        {
+            this.btnBrowseKeystore.Click += btnBrowseKeystore_Click;
+            //this.btnGetBase64.Click += btnGetBase64_Click;
+            this.btnCopyBase64.Click += btnCopyBase64_Click;
+        }
+
+        private void btnBrowseKeystore_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Filter = "Keystore files (*.jks;*.keystore)|*.jks;*.keystore|All files (*.*)|*.*";
+
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    txtKeystorePath.Text = dialog.FileName;
+                    GetBase64();
+                }
+            }
+        }
+        private void btnGetBase64_Click(object sender, EventArgs e)
+        {
+            GetBase64();
+        }
+
+        void GetBase64()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeystorePath.Text) ||
+                !File.Exists(txtKeystorePath.Text))
+            {
+                MessageBox.Show("Please select a valid keystore file.");
+                return;
+            }
+
+            try
+            {
+                byte[] fileBytes = File.ReadAllBytes(txtKeystorePath.Text);
+                string base64 = Convert.ToBase64String(fileBytes);
+
+                txtBase64.Text = base64;
+                Clipboard.SetText(base64);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to encode keystore.\n" + ex.Message);
+            }
+        }
+
+        private void btnCopyBase64_Click(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrEmpty(txtBase64.Text))
+            {
+                Clipboard.SetText(txtBase64.Text);
+            }
+        }
+
+        #endregion
     }
 }
