@@ -20,10 +20,12 @@ namespace AndroidReleaseTool
             this.btnBrowseAab.Click += new System.EventHandler(this.btnBrowseAab_Click);
             this.btnBrowseOutput.Click += new System.EventHandler(this.btnBrowseOutput_Click);
             this.btnInstall.Click += new System.EventHandler(this.btnInstall_Click);
+            btnBrowseKeystoreAab.Click += BtnBrowseKeystoreAab_Click;
 
             WireKeystoreBase64Events();
         }
 
+        #region AAB install
         private Task RunCommandAsync(string arguments)
         {
             return Task.Run(() =>
@@ -124,6 +126,9 @@ namespace AndroidReleaseTool
 
             txtLog.Clear();
 
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string bundleToolPath = Path.Combine(baseDir, "bundletool.jar");
+
             string aabPath = txtAabPath.Text;
             string outputDir = txtOutputFolder.Text;
 
@@ -135,9 +140,10 @@ namespace AndroidReleaseTool
             string aabName = Path.GetFileNameWithoutExtension(aabPath);
             string apksPath = Path.Combine(outputDir, aabName + ".apks");
 
-            bool needRebuild = true;
+            bool cleanBuild = chkCleanBuildAab.Checked;
+            bool needRebuild = cleanBuild;
 
-            if (File.Exists(apksPath))
+            if (File.Exists(apksPath) && !cleanBuild)
             {
                 DateTime aabTime = File.GetLastWriteTimeUtc(aabPath);
                 DateTime apksTime = File.GetLastWriteTimeUtc(apksPath);
@@ -149,30 +155,78 @@ namespace AndroidReleaseTool
                 }
                 else
                 {
-                    txtLog.AppendText("AAB was updated. Rebuilding APKs.\r\n");
+                    txtLog.AppendText("AAB updated. Rebuilding APKs.\r\n");
                 }
+            }
+            else if (cleanBuild)
+            {
+                txtLog.AppendText("Clean build enabled. Forcing rebuild.\r\n");
             }
             else
             {
                 txtLog.AppendText("No APKs found. Building.\r\n");
             }
 
+            // Resolve keystore info
+            string keystorePath = txtKeystorePathAab.Text;
+            string keystoreAlias = txtKeystoreAliasAab.Text;
+            string keystorePassword = txtKeystorePasswordAab.Text;
+            string aliasPassword = txtAliasPasswordAab.Text;
+
+            bool useDebugKey =
+                string.IsNullOrWhiteSpace(keystorePath) &&
+                string.IsNullOrWhiteSpace(keystoreAlias) &&
+                string.IsNullOrWhiteSpace(keystorePassword) &&
+                string.IsNullOrWhiteSpace(aliasPassword);
+
+            if (useDebugKey)
+            {
+                keystorePath = Path.Combine(baseDir, "debug.keystore");
+                keystoreAlias = "androiddebugkey";
+                keystorePassword = "android";
+                aliasPassword = "android";
+
+                txtLog.AppendText("Using debug keystore.\r\n");
+            }
+            else
+            {
+                txtLog.AppendText("Using custom keystore.\r\n");
+            }
+
             if (needRebuild)
             {
-                await RunCommandAsync(
-                    "-jar \"" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bundletool.jar") + "\" build-apks --overwrite " +
+                string buildArgs =
+                    "-jar \"" + bundleToolPath + "\" build-apks --overwrite " +
                     "--bundle=\"" + aabPath + "\" " +
-                    "--output=\"" + apksPath + "\""
-                );
+                    "--output=\"" + apksPath + "\" " +
+                    "--ks=\"" + keystorePath + "\" " +
+                    "--ks-key-alias=\"" + keystoreAlias + "\" " +
+                    "--ks-pass=pass:" + keystorePassword + " " +
+                    "--key-pass=pass:" + aliasPassword;
+
+                await RunCommandAsync(buildArgs);
             }
 
             await RunCommandAsync(
-                "-jar \"" + Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bundletool.jar") + "\" install-apks " +
+                "-jar \"" + bundleToolPath + "\" install-apks " +
                 "--apks=\"" + apksPath + "\""
             );
 
             txtLog.AppendText("Install completed successfully.\r\n");
         }
+
+        private void BtnBrowseKeystoreAab_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dlg = new OpenFileDialog())
+            {
+                dlg.Filter = "Keystore files (*.jks)|*.jks|All files (*.*)|*.*";
+                if (dlg.ShowDialog() == DialogResult.OK)
+                {
+                    txtKeystorePathAab.Text = dlg.FileName;
+                }
+            }
+        }
+        #endregion
 
         #region Keystore
         private void WireKeystoreBase64Events()
@@ -232,5 +286,10 @@ namespace AndroidReleaseTool
         }
 
         #endregion
+
+        private void tableLayout_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
     }
 }
