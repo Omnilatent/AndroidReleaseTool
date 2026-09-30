@@ -23,17 +23,94 @@ namespace AndroidReleaseTool
             btnBrowseKeystoreAab.Click += BtnBrowseKeystoreAab_Click;
 
             WireKeystoreBase64Events();
+            Load += (s, e) => CheckDependencies();
         }
 
         #region AAB install
-        private Task RunCommandAsync(string arguments)
+        private static IEnumerable<string> JavaCandidates()
         {
+            string home = Environment.GetEnvironmentVariable("JAVA_HOME");
+            if (!string.IsNullOrWhiteSpace(home))
+                yield return Path.Combine(home.Trim('"'), "bin", "java.exe");
+
+            foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
+            {
+                string candidate = null;
+                try { candidate = Path.Combine(dir.Trim().Trim('"'), "java.exe"); }
+                catch (ArgumentException) { }
+                if (candidate != null) yield return candidate;
+            }
+        }
+
+        // Reads the PE header: x64 = 0x8664, ARM64 = 0xAA64, x86 = 0x014C.
+        private static bool Is64Bit(string exePath)
+        {
+            try
+            {
+                using (var r = new BinaryReader(File.OpenRead(exePath)))
+                {
+                    r.BaseStream.Seek(0x3C, SeekOrigin.Begin);
+                    r.BaseStream.Seek(r.ReadInt32() + 4, SeekOrigin.Begin);
+                    ushort machine = r.ReadUInt16();
+                    return machine == 0x8664 || machine == 0xAA64;
+                }
+            }
+            catch (Exception) { return false; }
+        }
+
+        // Prefers a 64-bit Java: a 32-bit JVM cannot allocate the heap bundletool needs for large AABs.
+        private static string FindJava(out bool is64)
+        {
+            string firstAny = null;
+            foreach (string candidate in JavaCandidates().Where(File.Exists))
+            {
+                if (Is64Bit(candidate)) { is64 = true; return candidate; }
+                if (firstAny == null) firstAny = candidate;
+            }
+            is64 = false;
+            return firstAny;
+        }
+
+        private void CheckDependencies()
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            bool javaIs64;
+            string java = FindJava(out javaIs64);
+            var checks = new[]
+            {
+                new { Name = "Java" + (java == null ? "" : javaIs64 ? " (64-bit)" : " (32-bit - too small for large AABs)"), Path = java,
+                      Fix = "Install a 64-bit JDK or set JAVA_HOME, then restart the app/Visual Studio." },
+                new { Name = "adb.exe", Path = File.Exists(Path.Combine(baseDir, "adb.exe")) ? Path.Combine(baseDir, "adb.exe") : null,
+                      Fix = "Missing next to the exe; check CopyToOutputDirectory in the project." },
+                new { Name = "bundletool.jar", Path = File.Exists(Path.Combine(baseDir, "bundletool.jar")) ? Path.Combine(baseDir, "bundletool.jar") : null,
+                      Fix = "Missing next to the exe; check CopyToOutputDirectory in the project." },
+                new { Name = "debug.keystore", Path = File.Exists(Path.Combine(baseDir, "debug.keystore")) ? Path.Combine(baseDir, "debug.keystore") : null,
+                      Fix = "Missing next to the exe; only needed when no custom keystore is set." },
+            };
+
+            txtLog.AppendText("Dependency check:" + Environment.NewLine);
+            foreach (var c in checks)
+            {
+                txtLog.AppendText(c.Path != null
+                    ? "  [OK]      " + c.Name + " -> " + c.Path + Environment.NewLine
+                    : "  [MISSING] " + c.Name + " - " + c.Fix + Environment.NewLine);
+            }
+            txtLog.AppendText(Environment.NewLine);
+        }
+
+        private Task<int> RunCommandAsync(string arguments)
+        {
+            bool is64;
+            string javaExe = FindJava(out is64) ?? throw new FileNotFoundException(
+                "Java was not found. Install a 64-bit JDK, or set JAVA_HOME, then restart Visual Studio.");
+            // A 32-bit JVM refuses to start when asked for a heap this large.
+            string heapArg = is64 ? "-Xmx2g " : "";
             return Task.Run(() =>
             {
                 var psi = new ProcessStartInfo
                 {
-                    FileName = "java",
-                    Arguments = arguments,
+                    FileName = javaExe,
+                    Arguments = heapArg + arguments,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -71,8 +148,18 @@ namespace AndroidReleaseTool
                     process.BeginErrorReadLine();
 
                     process.WaitForExit();
+                    return process.ExitCode;
                 }
             });
+        }
+
+        private async Task RunCommandOrThrowAsync(string arguments)
+        {
+            int exitCode = await RunCommandAsync(arguments);
+            if (exitCode != 0)
+            {
+                throw new InvalidOperationException("Command failed with exit code " + exitCode + ". See log above.");
+            }
         }
 
         private void btnBrowseAab_Click(object sender, EventArgs e)
@@ -193,26 +280,35 @@ namespace AndroidReleaseTool
                 txtLog.AppendText("Using custom keystore.\r\n");
             }
 
-            if (needRebuild)
+            try
             {
-                string buildArgs =
-                    "-jar \"" + bundleToolPath + "\" build-apks --overwrite " +
-                    "--bundle=\"" + aabPath + "\" " +
-                    "--output=\"" + apksPath + "\" " +
-                    "--ks=\"" + keystorePath + "\" " +
-                    "--ks-key-alias=\"" + keystoreAlias + "\" " +
-                    "--ks-pass=pass:" + keystorePassword + " " +
-                    "--key-pass=pass:" + aliasPassword;
+                if (needRebuild)
+                {
+                    string buildArgs =
+                        "-jar \"" + bundleToolPath + "\" build-apks --overwrite " +
+                        "--bundle=\"" + aabPath + "\" " +
+                        "--output=\"" + apksPath + "\" " +
+                        "--ks=\"" + keystorePath + "\" " +
+                        "--ks-key-alias=\"" + keystoreAlias + "\" " +
+                        "--ks-pass=pass:" + keystorePassword + " " +
+                        "--key-pass=pass:" + aliasPassword;
 
-                await RunCommandAsync(buildArgs);
+                    await RunCommandOrThrowAsync(buildArgs);
+                }
+
+                await RunCommandOrThrowAsync(
+                    "-jar \"" + bundleToolPath + "\" install-apks " +
+                    "--adb=\"" + Path.Combine(baseDir, "adb.exe") + "\" " +
+                    "--apks=\"" + apksPath + "\""
+                );
+
+                txtLog.AppendText("Install completed successfully.\r\n");
             }
-
-            await RunCommandAsync(
-                "-jar \"" + bundleToolPath + "\" install-apks " +
-                "--apks=\"" + apksPath + "\""
-            );
-
-            txtLog.AppendText("Install completed successfully.\r\n");
+            catch (Exception ex)
+            {
+                txtLog.AppendText("[ERR] " + ex.Message + Environment.NewLine);
+                MessageBox.Show(ex.Message, "Install failed");
+            }
         }
 
         private void BtnBrowseKeystoreAab_Click(object sender, EventArgs e)
