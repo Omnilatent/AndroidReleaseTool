@@ -22,6 +22,8 @@ namespace AndroidReleaseTool
             this.btnInstall.Click += new System.EventHandler(this.btnInstall_Click);
             btnBrowseKeystoreAab.Click += BtnBrowseKeystoreAab_Click;
 
+            txtOutputFolder.Text = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "APKs");
+
             WireKeystoreBase64Events();
             Load += (s, e) => CheckDependencies();
         }
@@ -73,19 +75,23 @@ namespace AndroidReleaseTool
 
         private void CheckDependencies()
         {
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string depsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Dependencies");
             bool javaIs64;
             string java = FindJava(out javaIs64);
             var checks = new[]
             {
                 new { Name = "Java" + (java == null ? "" : javaIs64 ? " (64-bit)" : " (32-bit - too small for large AABs)"), Path = java,
                       Fix = "Install a 64-bit JDK or set JAVA_HOME, then restart the app/Visual Studio." },
-                new { Name = "adb.exe", Path = File.Exists(Path.Combine(baseDir, "adb.exe")) ? Path.Combine(baseDir, "adb.exe") : null,
-                      Fix = "Missing next to the exe; check CopyToOutputDirectory in the project." },
-                new { Name = "bundletool.jar", Path = File.Exists(Path.Combine(baseDir, "bundletool.jar")) ? Path.Combine(baseDir, "bundletool.jar") : null,
-                      Fix = "Missing next to the exe; check CopyToOutputDirectory in the project." },
-                new { Name = "debug.keystore", Path = File.Exists(Path.Combine(baseDir, "debug.keystore")) ? Path.Combine(baseDir, "debug.keystore") : null,
-                      Fix = "Missing next to the exe; only needed when no custom keystore is set." },
+                new { Name = "adb.exe", Path = File.Exists(Path.Combine(depsDir, "adb.exe")) ? Path.Combine(depsDir, "adb.exe") : null,
+                      Fix = "Missing from the Dependencies folder; check CopyToOutputDirectory in the project." },
+                new { Name = "AdbWinApi.dll", Path = File.Exists(Path.Combine(depsDir, "AdbWinApi.dll")) ? Path.Combine(depsDir, "AdbWinApi.dll") : null,
+                      Fix = "Required by adb.exe; must sit next to it in Dependencies." },
+                new { Name = "AdbWinUsbApi.dll", Path = File.Exists(Path.Combine(depsDir, "AdbWinUsbApi.dll")) ? Path.Combine(depsDir, "AdbWinUsbApi.dll") : null,
+                      Fix = "Required by adb.exe; must sit next to it in Dependencies." },
+                new { Name = "bundletool.jar", Path = File.Exists(Path.Combine(depsDir, "bundletool.jar")) ? Path.Combine(depsDir, "bundletool.jar") : null,
+                      Fix = "Missing from the Dependencies folder; check CopyToOutputDirectory in the project." },
+                new { Name = "debug.keystore", Path = File.Exists(Path.Combine(depsDir, "debug.keystore")) ? Path.Combine(depsDir, "debug.keystore") : null,
+                      Fix = "Missing from the Dependencies folder; only needed when no custom keystore is set." },
             };
 
             txtLog.AppendText("Dependency check:" + Environment.NewLine);
@@ -172,18 +178,6 @@ namespace AndroidReleaseTool
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     txtAabPath.Text = dialog.FileName;
-
-                    // Get folder containing the AAB
-                    string aabDirectory = Path.GetDirectoryName(dialog.FileName);
-
-                    // Create APKs subfolder path
-                    string apksFolder = Path.Combine(aabDirectory, "APKs");
-
-                    // Auto set output folder only if empty
-                    if (string.IsNullOrEmpty(txtOutputFolder.Text))
-                    {
-                        txtOutputFolder.Text = apksFolder;
-                    }
                 }
             }
         }
@@ -214,7 +208,8 @@ namespace AndroidReleaseTool
             txtLog.Clear();
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string bundleToolPath = Path.Combine(baseDir, "bundletool.jar");
+            string depsDir = Path.Combine(baseDir, "Dependencies");
+            string bundleToolPath = Path.Combine(depsDir, "bundletool.jar");
 
             string aabPath = txtAabPath.Text;
             string outputDir = txtOutputFolder.Text;
@@ -228,7 +223,7 @@ namespace AndroidReleaseTool
             string apksPath = Path.Combine(outputDir, aabName + ".apks");
 
             bool cleanBuild = chkCleanBuildAab.Checked;
-            bool needRebuild = cleanBuild;
+            bool needRebuild = true;
 
             if (File.Exists(apksPath) && !cleanBuild)
             {
@@ -268,7 +263,7 @@ namespace AndroidReleaseTool
 
             if (useDebugKey)
             {
-                keystorePath = Path.Combine(baseDir, "debug.keystore");
+                keystorePath = Path.Combine(depsDir, "debug.keystore");
                 keystoreAlias = "androiddebugkey";
                 keystorePassword = "android";
                 aliasPassword = "android";
@@ -298,7 +293,7 @@ namespace AndroidReleaseTool
 
                 await RunCommandOrThrowAsync(
                     "-jar \"" + bundleToolPath + "\" install-apks " +
-                    "--adb=\"" + Path.Combine(baseDir, "adb.exe") + "\" " +
+                    "--adb=\"" + Path.Combine(depsDir, "adb.exe") + "\" " +
                     "--apks=\"" + apksPath + "\""
                 );
 
